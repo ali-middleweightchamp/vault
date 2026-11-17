@@ -1,0 +1,76 @@
+[project]
+name = "vault-backend"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "sqlalchemy>=2.0",
+    "alembic>=1.14",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.6",
+    "psycopg2-binary>=2.9",
+    "redis>=5.2",
+    "python-jose[cryptography]>=3.3",
+    "passlib[argon2]>=1.7",
+    "httpx>=0.28",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "hypothesis>=6.122",
+    "testcontainers[postgres]>=4.9",
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "import-linter>=2.1",
+]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.backends.legacy:build"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.importlinter]
+root_packages = ["app"]
+
+[[tool.importlinter.contracts]]
+name = "Modules only communicate via service layer"
+type = "forbidden"
+source_modules = [
+    "app.modules.wallets",
+    "app.modules.transfers",
+    "app.modules.funding",
+    "app.modules.history",
+    "app.modules.admin",
+]
+forbidden_modules = [
+    "app.modules.identity.models",
+    "app.modules.identity.repository",
+    "app.modules.wallets.models",
+    "app.modules.wallets.repository",
+    "app.modules.ledger.models",
+    "app.modules.ledger.repository",
+    "app.modules.transfers.models",
+    "app.modules.transfers.repository",
+]
