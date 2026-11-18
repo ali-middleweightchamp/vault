@@ -1,243 +1,244 @@
-# Vault — Project Roadmap
+# Vault — План проекта
 
-> Sandbox digital wallet with real banking logic. Built as a portfolio project to demonstrate double-entry bookkeeping, idempotency, concurrency, and ACID transactions.
+> Sandbox-кошелёк с настоящей банковской логикой. Учебный проект-портфолио для демонстрации двойной записи, идемпотентности, конкурентности и ACID-транзакций.
 
 ---
 
-## Stage 0 — Scaffold ✅
-**Goal:** Working skeleton. `docker compose up` brings everything up. CI is green. Modules are empty but wired.
+## Этап 0 — Каркас ✅
+**Цель:** рабочий скелет. `docker compose up` поднимает всё. CI зелёный. Модули пустые, но подключены.
 
-**Deliverables:**
-- [x] Repository structure: `backend/`, `frontend/`, `provider-sim/`, `docs/`
+**Что сделано:**
+- [x] Структура репозитория: `backend/`, `frontend/`, `provider-sim/`, `docs/`
 - [x] Docker Compose: `db`, `redis`, `api`, `worker`, `provider-sim`, `web`
-- [x] 9 backend modules with stubs (`identity`, `wallets`, `ledger`, `transfers`, `funding`, `fees_limits`, `history`, `admin`, `risk`)
-- [x] CI pipeline: `ruff`, `mypy`, `import-linter`, `pytest`, `tsc`
-- [x] Alembic setup
-- [x] Skeleton OpenAPI (all endpoints return 501)
-- [x] ADR folder
+- [x] 9 модулей backend с заглушками (`identity`, `wallets`, `ledger`, `transfers`, `funding`, `fees_limits`, `history`, `admin`, `risk`)
+- [x] CI: `ruff`, `mypy`, `import-linter`, `pytest`, `tsc`
+- [x] Alembic (миграции БД)
+- [x] Скелет OpenAPI (все эндпоинты возвращают 501)
+- [x] Папка ADR с 7 открытыми вопросами
+- [x] README и план проекта
 
-**Acceptance:** `GET /health` returns 200. CI is green.
-
----
-
-## Stage 1 — Access & Core
-**Goal:** A user can register, log in, and see their UZS wallet. The ledger engine works and is tested.
-
-### 1a — Ledger Engine
-The foundation. Everything else depends on this.
-
-**Deliverables:**
-- [ ] DB tables: `ledger_accounts`, `ledger_transactions`, `ledger_entries`
-- [ ] Alembic migration: ledger tables
-- [ ] `ledger.service.create_transaction(entries)` — atomic, validates zero-sum
-- [ ] Balance calculation: `SELECT SUM(amount) FROM ledger_entries WHERE account_id = ?`
-- [ ] Reversal: creates mirror entries with `reversal_of` reference
-- [ ] **Property-based tests (Hypothesis):**
-  - Sum of entries in any transaction = 0
-  - Balance of account = sum of its entries
-  - User account balance never goes negative
-- [ ] Integration tests with real PostgreSQL (Testcontainers)
-
-### 1b — Identity
-**Deliverables:**
-- [ ] DB tables: `users`, `user_sessions`
-- [ ] Alembic migration: identity tables
-- [ ] `POST /auth/register` — email, password, username
-- [ ] Email verification flow (token sent, `GET /auth/verify-email?token=`)
-- [ ] `POST /auth/login` — returns access + refresh JWT
-- [ ] `POST /auth/refresh` — rotates refresh token
-- [ ] `POST /auth/logout` — revokes session
-- [ ] `GET /me/sessions`, `DELETE /me/sessions` (logout all)
-- [ ] Password hashing: argon2
-- [ ] JWT: access token (15 min), refresh token (30 days, hash stored in `user_sessions`)
-
-### 1c — Wallets
-**Deliverables:**
-- [ ] DB table: `wallets`
-- [ ] Auto-create UZS wallet on registration
-- [ ] `GET /wallets` — list user's wallets
-- [ ] `GET /wallets/{id}` — wallet details + balance (computed from ledger)
-- [ ] `POST /wallets/{id}/freeze` — user self-freeze
-
-### 1d — PIN
-**Deliverables:**
-- [ ] `POST /me/pin` — set PIN (hashed with argon2)
-- [ ] PIN verification function (used by transfers in Stage 2)
-- [ ] Failed attempt counter + temporary lockout (`pin_failed_attempts`, `pin_locked_until`)
-
-**Stage 1 Acceptance:**
-- User registers → email verified → sees UZS wallet with 0 balance
-- Refresh token rotation works
-- Property-based test on zero-sum is green
-- Testcontainers integration tests pass in CI
+**Критерий готовности:** `GET /health` возвращает 200, CI зелёный.
 
 ---
 
-## Stage 2 — Money Moves
-**Goal:** Top up, transfer, withdraw. 100 concurrent transfers don't go negative. Duplicate webhook is ignored.
+## Этап 1 — Доступ и ядро
+**Цель:** пользователь регистрируется, входит и видит кошелёк UZS с нулевым балансом. Движок ledger работает и покрыт тестами.
 
-### 2a — Transfers (P2P)
-**Deliverables:**
-- [ ] DB table: `transfers`, `idempotency_keys`
-- [ ] `POST /transfers` — P2P transfer by username
-- [ ] PIN confirmation
-- [ ] Idempotency: same `Idempotency-Key` → same response, no double debit
-- [ ] Locking: `SELECT ... FOR UPDATE` on both accounts ordered by ID (prevents deadlock)
-- [ ] Atomic: one DB transaction (create entries + transfer record + outbox event)
-- [ ] Fee calculation from `fee_rules`
-- [ ] Limit check from `limit_rules` (per-operation and daily)
+### 1а — Движок Ledger
+Фундамент. Всё остальное зависит от него.
+
+**Что делаем:**
+- [ ] Таблицы БД: `ledger_accounts`, `ledger_transactions`, `ledger_entries`
+- [ ] Миграция Alembic: таблицы ledger
+- [ ] `ledger.service.create_transaction(entries)` — атомарная, проверяет нулевую сумму
+- [ ] Расчёт баланса: `SELECT SUM(amount) FROM ledger_entries WHERE account_id = ?`
+- [ ] Сторно: создаёт зеркальные проводки с `reversal_of`
+- [ ] **Property-based тесты (Hypothesis):**
+  - Сумма проводок любой транзакции = 0
+  - Баланс счёта = сумма его проводок
+  - Баланс пользовательского счёта никогда не уходит в минус
+- [ ] Интеграционные тесты на реальном PostgreSQL (Testcontainers)
+
+### 1б — Identity (регистрация и вход)
+**Что делаем:**
+- [ ] Таблицы БД: `users`, `user_sessions`
+- [ ] Миграция Alembic: таблицы identity
+- [ ] `POST /auth/register` — email, пароль, username
+- [ ] Подтверждение email (токен в письме, `GET /auth/verify-email?token=`)
+- [ ] `POST /auth/login` — возвращает access + refresh JWT
+- [ ] `POST /auth/refresh` — ротация refresh-токена
+- [ ] `POST /auth/logout` — отзыв сессии
+- [ ] `GET /me/sessions`, `DELETE /me/sessions` (выход со всех устройств)
+- [ ] Хеширование паролей: argon2
+- [ ] JWT: access-токен (15 мин), refresh-токен (30 дней, хеш в `user_sessions`)
+
+### 1в — Кошельки
+**Что делаем:**
+- [ ] Таблица БД: `wallets`
+- [ ] Автосоздание кошелька UZS при регистрации
+- [ ] `GET /wallets` — список кошельков пользователя
+- [ ] `GET /wallets/{id}` — детали кошелька + баланс (считается из ledger)
+- [ ] `POST /wallets/{id}/freeze` — самозаморозка пользователем
+
+### 1г — PIN
+**Что делаем:**
+- [ ] `POST /me/pin` — установить PIN (хранится как хеш argon2)
+- [ ] Функция проверки PIN (используется переводами на этапе 2)
+- [ ] Счётчик неверных попыток + временная блокировка (`pin_failed_attempts`, `pin_locked_until`)
+
+**Критерий готовности этапа 1:**
+- Регистрация → подтверждение email → виден кошелёк UZS с балансом 0
+- Ротация refresh-токена работает
+- Property-based тест на нулевую сумму зелёный
+- Интеграционные тесты с Testcontainers проходят в CI
+
+---
+
+## Этап 2 — Деньги двигаются
+**Цель:** пополнение, перевод, вывод. 100 параллельных переводов не уводят баланс в минус. Дублированный вебхук игнорируется.
+
+### 2а — Переводы (P2P)
+**Что делаем:**
+- [ ] Таблицы БД: `transfers`, `idempotency_keys`
+- [ ] `POST /transfers` — P2P-перевод по username
+- [ ] Подтверждение PIN
+- [ ] Идемпотентность: один `Idempotency-Key` → один результат, без двойного списания
+- [ ] Блокировки: `SELECT ... FOR UPDATE` на оба счёта в порядке возрастания ID (защита от deadlock)
+- [ ] Атомарность: одна транзакция БД (проводки + запись перевода + событие в outbox)
+- [ ] Расчёт комиссии из `fee_rules`
+- [ ] Проверка лимитов из `limit_rules` (на операцию и за день)
 - [ ] `GET /transfers/{id}`
-- [ ] **Concurrency test:** 100 parallel transfers from same wallet → balance never negative
-- [ ] **Idempotency test:** same key twice → one debit
+- [ ] **Тест на конкурентность:** 100 параллельных переводов с одного кошелька → баланс никогда не уходит в минус
+- [ ] **Тест на идемпотентность:** один ключ дважды → одно списание
 
-### 2b — Provider Simulator
-**Deliverables:**
-- [ ] `POST /v1/charges` — async topup, responds with `provider_ref`
-- [ ] `POST /v1/payouts` — async withdrawal
-- [ ] `GET /v1/operations/{id}` — status polling endpoint
-- [ ] Async webhook delivery with HMAC-SHA256 signature (`X-Signature`, `X-Timestamp`)
-- [ ] Test card behaviors (success, decline, slow, duplicate webhook)
+### 2б — Симулятор провайдера
+**Что делаем:**
+- [ ] `POST /v1/charges` — асинхронное пополнение, возвращает `provider_ref`
+- [ ] `POST /v1/payouts` — асинхронный вывод
+- [ ] `GET /v1/operations/{id}` — эндпоинт опроса статуса
+- [ ] Асинхронная доставка вебхуков с подписью HMAC-SHA256 (`X-Signature`, `X-Timestamp`)
+- [ ] Поведение тестовых карт (успех, отказ, медленный, дублированный вебхук)
 
-### 2c — Funding (Topup & Withdrawal)
-**Deliverables:**
-- [ ] DB table: `funding_operations`, `outbox_events`
-- [ ] `POST /funding/topups` — creates pending operation, calls provider-sim
-- [ ] `POST /funding/withdrawals` — reserves funds (wallet → suspense), calls provider-sim
-- [ ] `POST /webhooks/provider` — receives webhook, verifies HMAC, processes idempotently
-- [ ] On topup success: `external → wallet` entries, status `succeeded`
-- [ ] On topup failure: status `failed` with reason
-- [ ] On withdrawal success: `suspense → external` entries, status `succeeded`
-- [ ] On withdrawal failure: `suspense → wallet` reversal, status `failed`
-- [ ] Webhook replay protection (idempotency by provider event ID)
-- [ ] Webhook timestamp validation (reject stale webhooks)
+### 2в — Пополнение и вывод
+**Что делаем:**
+- [ ] Таблицы БД: `funding_operations`, `outbox_events`
+- [ ] `POST /funding/topups` — создаёт pending-операцию, вызывает симулятор
+- [ ] `POST /funding/withdrawals` — резервирует деньги (кошелёк → suspense), вызывает симулятор
+- [ ] `POST /webhooks/provider` — принимает вебхук, проверяет HMAC, обрабатывает идемпотентно
+- [ ] Успех пополнения: проводки `external → wallet`, статус `succeeded`
+- [ ] Отказ пополнения: статус `failed` с причиной
+- [ ] Успех вывода: проводки `suspense → external`, статус `succeeded`
+- [ ] Отказ вывода: обратные проводки `suspense → wallet`, статус `failed`
+- [ ] Защита от повтора вебхука (идемпотентность по ID события провайдера)
+- [ ] Проверка метки времени вебхука (отклонять устаревшие)
 
-### 2d — Worker & Outbox
-**Deliverables:**
-- [ ] Outbox pattern: events written in same DB transaction as business operation
-- [ ] Worker polls `outbox_events`, publishes to Redis queue
-- [ ] Worker polls provider-sim for status if webhook not received within timeout
-- [ ] Retry logic with exponential backoff
+### 2г — Worker и Outbox
+**Что делаем:**
+- [ ] Outbox: события пишутся в той же транзакции что и бизнес-операция
+- [ ] Worker читает `outbox_events`, публикует в очередь Redis
+- [ ] Worker опрашивает симулятор, если вебхук не пришёл за отведённое время
+- [ ] Логика повторов с экспоненциальной задержкой
 
-**Stage 2 Acceptance:**
-- Top up → transfer → withdraw complete end-to-end
-- 100 parallel transfers from one wallet: balance never goes below 0
-- Duplicate webhook: second one is a no-op
-- Idempotency: repeat POST with same key → original response returned
+**Критерий готовности этапа 2:**
+- Пополнение → перевод → вывод работают end-to-end
+- 100 параллельных переводов с одного кошелька: баланс никогда не уходит ниже 0
+- Дублированный вебхук: второй — no-op
+- Идемпотентность: повтор POST с тем же ключом → возвращается прежний ответ
 
 ---
 
-## Stage 3 — Limits, History, Admin, UI
-**Goal:** Full MVP. All features wired. UI complete. Deployable.
+## Этап 3 — Лимиты, история, админка, UI
+**Цель:** полный MVP. Все фичи подключены. UI готов. Можно деплоить.
 
-### 3a — Fees & Limits
-**Deliverables:**
-- [ ] DB tables: `fee_rules`, `limit_rules`
-- [ ] Seed data: default fee and limit values
-- [ ] Fee calculation service: fixed and percentage, by operation type
-- [ ] Limit check service: per-operation and per-day rolling window
-- [ ] Meaningful errors: `LIMIT_EXCEEDED` with `remaining` amount
+### 3а — Комиссии и лимиты
+**Что делаем:**
+- [ ] Таблицы БД: `fee_rules`, `limit_rules`
+- [ ] Seed-данные: дефолтные значения комиссий и лимитов
+- [ ] Сервис расчёта комиссии: фиксированная и процентная, по типу операции
+- [ ] Сервис проверки лимитов: на операцию и скользящее окно за день
+- [ ] Понятные ошибки: `LIMIT_EXCEEDED` с полем `remaining`
 
-### 3b — History
-**Deliverables:**
-- [ ] `GET /transactions` — cursor-paginated list with filters (period, type, status)
-- [ ] Search by comment
-- [ ] `GET /transactions/{id}` — full details with entries
-- [ ] User sees only their own transactions
+### 3б — История
+**Что делаем:**
+- [ ] `GET /transactions` — курсорный список с фильтрами (период, тип, статус)
+- [ ] Поиск по комментарию
+- [ ] `GET /transactions/{id}` — полные детали с проводками
+- [ ] Пользователь видит только свои операции
 
-### 3c — Admin
-**Deliverables:**
-- [ ] DB table: `audit_log`
-- [ ] `GET /admin/users` — search by email or username
-- [ ] `GET /admin/users/{id}` — profile, wallets, recent entries
-- [ ] `POST /admin/users/{id}/freeze` — freeze wallet, write to audit_log
+### 3в — Админка
+**Что делаем:**
+- [ ] Таблица БД: `audit_log`
+- [ ] `GET /admin/users` — поиск по email или username
+- [ ] `GET /admin/users/{id}` — профиль, кошельки, последние проводки
+- [ ] `POST /admin/users/{id}/freeze` — заморозить кошелёк, записать в `audit_log`
 - [ ] `POST /admin/wallets/{id}/unfreeze`
-- [ ] `GET /admin/ledger/transactions` — full ledger view
+- [ ] `GET /admin/ledger/transactions` — полный просмотр ledger
 - [ ] `GET /admin/audit-log`
-- [ ] Admin role check on every endpoint
-- [ ] Admin can never change balance directly — only via ledger entry
+- [ ] Проверка роли admin на каждом эндпоинте
+- [ ] Админ никогда не меняет баланс напрямую — только через проводку
 
-### 3d — Frontend (Client Dashboard)
-**Deliverables:**
-- [ ] Design system: dark theme, green accent, `Inter` font, Tailwind config
-- [ ] Demo banner: «Демо: деньги виртуальные» always visible
-- [ ] Auth screens: register, login, email verification
-- [ ] Home: balance card, quick actions (Transfer, Top Up), recent transactions
-- [ ] Transfer wizard: recipient search → amount + comment → PIN confirmation → receipt
-- [ ] Top Up: amount + test card → pending status screen with auto-refresh
-- [ ] History: list with filters, transaction detail
-- [ ] Profile: PIN change, session list, limits info
-- [ ] All loading states: skeletons (not spinners)
-- [ ] All empty states with CTAs
-- [ ] All error states with human-readable messages
+### 3г — Фронтенд (кабинет клиента)
+**Что делаем:**
+- [ ] Дизайн-система: тёмная тема, зелёный акцент, шрифт `Inter`, конфиг Tailwind
+- [ ] Баннер «Демо: деньги виртуальные» — всегда виден
+- [ ] Экраны аутентификации: регистрация, вход, подтверждение email
+- [ ] Главная: карточка баланса, быстрые действия (Перевести, Пополнить), последние операции
+- [ ] Мастер перевода: поиск получателя → сумма + комментарий → подтверждение PIN → чек
+- [ ] Пополнение: сумма + тестовая карта → экран статуса «В обработке» с авто-обновлением
+- [ ] История: список с фильтрами, детали операции
+- [ ] Профиль: смена PIN, список сессий, лимиты
+- [ ] Все состояния загрузки: скелетоны (не спиннеры)
+- [ ] Все пустые состояния с подсказками
+- [ ] Все состояния ошибок с человекочитаемыми сообщениями
 
-### 3e — Admin UI
-**Deliverables:**
-- [ ] User search table
-- [ ] User card: profile, wallets, entries
-- [ ] Freeze/unfreeze with reason
-- [ ] Audit log view
+### 3д — Фронтенд (админка)
+**Что делаем:**
+- [ ] Таблица поиска пользователей
+- [ ] Карточка пользователя: профиль, кошельки, проводки
+- [ ] Заморозка/разморозка с причиной
+- [ ] Просмотр audit log
 
-### 3f — Deployment
-**Deliverables:**
-- [ ] VPS deployment with Docker Compose
-- [ ] HTTPS via Caddy
-- [ ] PostgreSQL backup cron job
-- [ ] CI: deploy on push to `main` after green tests
-- [ ] Public demo with rate limits on test top-ups
+### 3е — Деплой
+**Что делаем:**
+- [ ] Деплой на VPS через Docker Compose
+- [ ] HTTPS через Caddy
+- [ ] Крон-задача для бэкапа PostgreSQL
+- [ ] CI: деплой при пуше в `main` после зелёных тестов
+- [ ] Публичная демка с лимитами на тестовые пополнения
 
-**Stage 3 Acceptance (Full MVP):**
-- Two users register, one tops up and transfers to the other, both see it in history
-- Transfer requires correct PIN; wrong PIN does not debit
-- Repeat request with same `Idempotency-Key` does not debit twice
-- 100 parallel transfers don't go negative
-- Duplicate provider webhook doesn't create second top-up
-- Sum of entries in every transaction = 0
-- Limit exceeded → clear error with remaining amount
-- Frozen wallet can't send or receive
-- Admin freeze action is in audit_log
-
----
-
-## Stage 4 — Mobile (Future)
-**Goal:** Flutter mobile app on top of the existing API.
-
-**Deliverables:**
-- [ ] Flutter project setup
-- [ ] Auth flows
-- [ ] Home screen with balance
-- [ ] Transfer and top-up flows
-- [ ] History with pull-to-refresh
-- [ ] Biometric PIN confirmation
+**Критерии приёмки MVP (этап 3):**
+- Два пользователя регистрируются, один пополняет и переводит другому, оба видят операцию в истории
+- Перевод требует верный PIN; неверный PIN не списывает деньги
+- Повтор запроса с тем же `Idempotency-Key` не списывает дважды
+- 100 параллельных переводов не уводят баланс в минус
+- Дублированный вебхук провайдера не создаёт второго пополнения
+- Сумма проводок каждой транзакции = 0
+- Превышение лимита → понятная ошибка с остатком
+- Замороженный кошелёк не отправляет и не принимает деньги
+- Заморозка админом записана в `audit_log`
 
 ---
 
-## Phase 2 — Extended Features (After MVP, on request)
-- USD wallet + UZS↔USD conversion (CBU rates + spread)
-- Holds (hold / capture / release)
+## Этап 4 — Мобильное приложение
+**Цель:** Flutter-приложение поверх готового API.
+
+**Что делаем:**
+- [ ] Инициализация Flutter-проекта
+- [ ] Экраны аутентификации
+- [ ] Главный экран с балансом
+- [ ] Переводы и пополнение
+- [ ] История с pull-to-refresh
+- [ ] Биометрическое подтверждение вместо PIN
+
+---
+
+## Фаза 2 — Расширенные функции (после MVP, по запросу)
+- Кошелёк USD + конвертация UZS ↔ USD (курсы ЦБУ + спред)
+- Холды (hold / capture / release)
 - 2FA (TOTP)
-- Payment requests
-- QR code transfers
-- KYC levels (Basic / Verified) with limit tiers
-- PDF and CSV statements
-- Push notifications
-- Admin: inline limit and fee editing
+- Запросы денег
+- Переводы по QR-коду
+- KYC-уровни (Basic / Verified) с лимитами по уровню
+- Выписки PDF и CSV
+- Push-уведомления
+- Редактирование лимитов и комиссий из интерфейса
 
-## Phase 3 — Advanced (On request)
-- Anti-fraud rules and alert queue
-- Reconciliation report (sum of all entries = 0 verification)
-- Auditor role (read-only)
-- Personal finance: categories, budgets, goals, analytics
+## Фаза 3 — Продвинутые функции (по запросу)
+- Антифрод-правила и очередь алертов
+- Сверка (reconciliation): проверка что сумма всех проводок = 0
+- Роль аудитора (только чтение)
+- Личные финансы: категории, бюджеты, цели, аналитика
 
 ---
 
-## Open Architecture Decisions (ADR needed before implementation)
+## Открытые архитектурные решения (нужен ADR перед реализацией)
 
-| # | Question | Status |
+| № | Вопрос | Статус |
 |---|---|---|
-| 1 | Sync vs async SQLAlchemy | open |
-| 2 | ARQ vs Celery for background tasks | open |
-| 3 | Transaction isolation level and locking strategy | open |
-| 4 | Balance cache column vs sum-of-entries | open |
-| 5 | Default values for fee_rules and limit_rules | open |
-| 6 | TTL for idempotency_keys and tokens | open |
-| 7 | adjustments account: separate or via suspense | open |
+| 1 | Синхронный или асинхронный SQLAlchemy | открыт |
+| 2 | ARQ или Celery для фоновых задач | открыт |
+| 3 | Уровень изоляции транзакций и стратегия блокировок | открыт |
+| 4 | Кэш-колонка баланса или сумма проводок | открыт |
+| 5 | Дефолтные значения `fee_rules` и `limit_rules` | открыт |
+| 6 | TTL для `idempotency_keys` и токенов | открыт |
+| 7 | Счёт `adjustments`: отдельный или через `suspense` | открыт |

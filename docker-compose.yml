@@ -57,7 +57,7 @@ services:
       api:
         condition: service_started
 
-  provider-sim:
+  provider-sim: # Симулятор банка
     build: ./provider-sim
     restart: unless-stopped
     ports:
